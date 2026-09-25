@@ -283,3 +283,83 @@ def get_indicators(
     finally:
         cursor.close()
         connection.close()
+
+
+@app.get("/api/v1/attack/techniques")
+def get_attack_techniques(
+    limit: int = Query(default=10, ge=1, le=100),
+):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM attack_techniques
+            WHERE revoked = FALSE
+              AND deprecated = FALSE;
+            """
+        )
+
+        total = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                attack_id,
+                stix_id,
+                name,
+                description,
+                tactics,
+                platforms,
+                is_subtechnique,
+                revoked,
+                deprecated,
+                created,
+                modified,
+                source,
+                source_reference
+            FROM attack_techniques
+            WHERE revoked = FALSE
+              AND deprecated = FALSE
+            ORDER BY attack_id
+            LIMIT %s;
+            """,
+            (limit,),
+        )
+
+        rows = cursor.fetchall()
+
+        techniques = []
+
+        for row in rows:
+            techniques.append(
+                {
+                    "id": row[0],
+                    "attack_id": row[1],
+                    "stix_id": row[2],
+                    "name": row[3],
+                    "description": row[4],
+                    "tactics": row[5],
+                    "platforms": row[6],
+                    "is_subtechnique": row[7],
+                    "revoked": row[8],
+                    "deprecated": row[9],
+                    "created": row[10],
+                    "modified": row[11],
+                    "source": row[12],
+                    "source_reference": row[13],
+                }
+            )
+
+        return {
+            "total": total,
+            "returned": len(techniques),
+            "techniques": techniques,
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
