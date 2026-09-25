@@ -1,7 +1,6 @@
-
-
 from fastapi import FastAPI, HTTPException, Query
 
+from api.routers.dashboard import router as dashboard_router
 from database.connection import get_connection
 
 
@@ -11,6 +10,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.include_router(dashboard_router)
+
 
 @app.get("/")
 def home():
@@ -18,52 +19,6 @@ def home():
         "message": "CTI Platform is running",
         "version": "0.1.0",
     }
-
-
-@app.get("/api/v1/dashboard/summary")
-def get_dashboard_summary():
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    try:
-        cursor.execute(
-            """
-            SELECT
-                (SELECT COUNT(*) FROM vulnerabilities)
-                    AS vulnerabilities,
-                (SELECT COUNT(*) FROM indicators)
-                    AS indicators,
-                (
-                    SELECT COUNT(*)
-                    FROM indicators
-                    WHERE LOWER(status) = 'online'
-                ) AS online_indicators,
-                (
-                    SELECT COUNT(*)
-                    FROM attack_techniques
-                    WHERE revoked = FALSE
-                      AND deprecated = FALSE
-                ) AS active_attack_techniques;
-            """
-        )
-
-        row = cursor.fetchone()
-
-        return {
-            "vulnerabilities": row[0],
-            "indicators": row[1],
-            "online_indicators": row[2],
-            "active_attack_techniques": row[3],
-            "sources": {
-                "cisa_kev": True,
-                "urlhaus": True,
-                "mitre_attack": True,
-            },
-        }
-
-    finally:
-        cursor.close()
-        connection.close()
 
 
 @app.get("/api/v1/feed")
