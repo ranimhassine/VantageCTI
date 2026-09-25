@@ -363,3 +363,62 @@ def get_attack_techniques(
     finally:
         cursor.close()
         connection.close()
+
+
+@app.get("/api/v1/attack/techniques/{attack_id}")
+def get_attack_technique(attack_id: str):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            SELECT
+                id,
+                attack_id,
+                stix_id,
+                name,
+                description,
+                tactics,
+                platforms,
+                is_subtechnique,
+                revoked,
+                deprecated,
+                created,
+                modified,
+                source,
+                source_reference
+            FROM attack_techniques
+            WHERE UPPER(attack_id) = UPPER(%s);
+            """,
+            (attack_id,),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"ATT&CK technique {attack_id} not found",
+            )
+
+        return {
+            "id": row[0],
+            "attack_id": row[1],
+            "stix_id": row[2],
+            "name": row[3],
+            "description": row[4],
+            "tactics": row[5],
+            "platforms": row[6],
+            "is_subtechnique": row[7],
+            "revoked": row[8],
+            "deprecated": row[9],
+            "created": row[10],
+            "modified": row[11],
+            "source": row[12],
+            "source_reference": row[13],
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
