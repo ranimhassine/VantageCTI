@@ -288,24 +288,63 @@ def get_indicators(
 @app.get("/api/v1/attack/techniques")
 def get_attack_techniques(
     limit: int = Query(default=10, ge=1, le=100),
+    tactic: str | None = Query(default=None),
+    platform: str | None = Query(default=None),
+    is_subtechnique: bool | None = Query(default=None),
 ):
     connection = get_connection()
     cursor = connection.cursor()
 
     try:
+        conditions = [
+            "revoked = FALSE",
+            "deprecated = FALSE",
+        ]
+        parameters = []
+
+        if tactic:
+            conditions.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM unnest(tactics) AS tactic_name
+                    WHERE LOWER(tactic_name) = LOWER(%s)
+                )
+                """
+            )
+            parameters.append(tactic)
+
+        if platform:
+            conditions.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM unnest(platforms) AS platform_name
+                    WHERE LOWER(platform_name) = LOWER(%s)
+                )
+                """
+            )
+            parameters.append(platform)
+
+        if is_subtechnique is not None:
+            conditions.append("is_subtechnique = %s")
+            parameters.append(is_subtechnique)
+
+        where_clause = "WHERE " + " AND ".join(conditions)
+
         cursor.execute(
-            """
+            f"""
             SELECT COUNT(*)
             FROM attack_techniques
-            WHERE revoked = FALSE
-              AND deprecated = FALSE;
-            """
+            {where_clause};
+            """,
+            parameters,
         )
 
         total = cursor.fetchone()[0]
 
         cursor.execute(
-            """
+            f"""
             SELECT
                 id,
                 attack_id,
@@ -322,12 +361,11 @@ def get_attack_techniques(
                 source,
                 source_reference
             FROM attack_techniques
-            WHERE revoked = FALSE
-              AND deprecated = FALSE
+            {where_clause}
             ORDER BY attack_id
             LIMIT %s;
             """,
-            (limit,),
+            parameters + [limit],
         )
 
         rows = cursor.fetchall()
@@ -357,6 +395,11 @@ def get_attack_techniques(
         return {
             "total": total,
             "returned": len(techniques),
+            "filters": {
+                "tactic": tactic,
+                "platform": platform,
+                "is_subtechnique": is_subtechnique,
+            },
             "techniques": techniques,
         }
 
