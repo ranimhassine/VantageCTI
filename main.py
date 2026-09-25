@@ -123,6 +123,73 @@ def get_vulnerability(cve_id: str):
         connection.close()
 
 
+@app.get("/api/v1/indicators/lookup")
+def lookup_indicator(
+    value: str = Query(..., min_length=1),
+):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            SELECT
+                id,
+                type,
+                value,
+                status,
+                threat_type,
+                malware_family,
+                first_seen,
+                last_seen,
+                source,
+                source_id,
+                source_reference
+            FROM indicators
+            WHERE value = %s
+            ORDER BY source, source_id;
+            """,
+            (value,),
+        )
+
+        rows = cursor.fetchall()
+
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Indicator not found: {value}",
+            )
+
+        indicators = []
+
+        for row in rows:
+            indicators.append(
+                {
+                    "id": row[0],
+                    "type": row[1],
+                    "value": row[2],
+                    "status": row[3],
+                    "threat_type": row[4],
+                    "malware_family": row[5],
+                    "first_seen": row[6],
+                    "last_seen": row[7],
+                    "source": row[8],
+                    "source_id": row[9],
+                    "source_reference": row[10],
+                }
+            )
+
+        return {
+            "value": value,
+            "matches": len(indicators),
+            "indicators": indicators,
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
 @app.get("/api/v1/indicators")
 def get_indicators(
     limit: int = Query(default=10, ge=1, le=100),
