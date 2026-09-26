@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS observables (
 -- ============================================================
 --
 -- Connects source indicators to normalized observables.
+--
 -- Example:
 --
 -- URL indicator
@@ -146,12 +147,13 @@ CREATE TABLE IF NOT EXISTS indicator_observables (
 
 
 -- ============================================================
--- Relationship Lookup Indexes
+-- Indicator-to-Observable Relationship Lookup Indexes
 -- ============================================================
 --
 -- The unique constraint above already provides an index beginning
--- with indicator_id. This additional index supports the reverse
--- investigation path:
+-- with indicator_id.
+--
+-- This additional index supports the reverse investigation path:
 --
 -- observable -> relationships -> indicators
 
@@ -161,12 +163,85 @@ ON indicator_observables (observable_id);
 
 
 -- ============================================================
+-- Observable Enrichment
+-- ============================================================
+--
+-- Stores provider-attributed enrichment for normalized observables.
+--
+-- Enrichment remains separate from the canonical observable so that:
+--
+-- 1. Provider data can be refreshed independently.
+-- 2. Multiple enrichment providers can be supported later.
+-- 3. Provider-derived metadata is not confused with the canonical
+--    observable identity.
+-- 4. Investigation evidence and enrichment metadata remain distinct.
+--
+-- The initial provider is IPinfo Lite for IP observables.
+-- The schema intentionally stores only fields that are part of the
+-- current enrichment model. Reputation and threat verdicts are not
+-- inferred from infrastructure metadata.
+
+CREATE TABLE IF NOT EXISTS observable_enrichments (
+    id SERIAL PRIMARY KEY,
+
+    observable_id INTEGER NOT NULL,
+    provider VARCHAR(100) NOT NULL,
+
+    -- Autonomous System information.
+    asn VARCHAR(50),
+    as_name TEXT,
+    as_domain TEXT,
+
+    -- Geographic metadata.
+    country_code VARCHAR(10),
+    country TEXT,
+
+    continent_code VARCHAR(10),
+    continent TEXT,
+
+    -- Records when this provider data was retrieved.
+    retrieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT observable_enrichments_observable_fk
+        FOREIGN KEY (observable_id)
+        REFERENCES observables(id)
+        ON DELETE CASCADE,
+
+    -- One current enrichment record per provider and observable.
+    -- Future refreshes update the existing provider record.
+    CONSTRAINT observable_enrichments_provider_unique
+        UNIQUE (
+            observable_id,
+            provider
+        )
+);
+
+
+-- ============================================================
+-- Observable Enrichment Lookup Indexes
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS
+    observable_enrichments_observable_id_idx
+ON observable_enrichments (observable_id);
+
+
+-- ============================================================
 -- Application Role Permissions
 -- ============================================================
 --
 -- The role itself and its password are not created here.
 -- Create the cti_app role separately and provide its credentials
 -- through the local .env file.
+--
+-- Schema ownership remains separate from the application role.
+-- The application receives only the permissions it requires to
+-- read and modify CTI data.
+
+
+-- ------------------------------------------------------------
+-- Table permissions
+-- ------------------------------------------------------------
 
 GRANT SELECT, INSERT, UPDATE, DELETE
 ON TABLE vulnerabilities
@@ -188,6 +263,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 ON TABLE indicator_observables
 TO cti_app;
 
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE observable_enrichments
+TO cti_app;
+
+
+-- ------------------------------------------------------------
+-- Sequence permissions
+-- ------------------------------------------------------------
 
 GRANT USAGE, SELECT
 ON SEQUENCE vulnerabilities_id_seq
@@ -207,4 +290,8 @@ TO cti_app;
 
 GRANT USAGE, SELECT
 ON SEQUENCE indicator_observables_id_seq
+TO cti_app;
+
+GRANT USAGE, SELECT
+ON SEQUENCE observable_enrichments_id_seq
 TO cti_app;

@@ -116,6 +116,47 @@ def get_intelligence_summary(
     }
 
 
+def get_enrichments(
+    cursor,
+    observable_id,
+):
+    cursor.execute(
+        """
+        SELECT
+            provider,
+            asn,
+            as_name,
+            as_domain,
+            country_code,
+            country,
+            continent_code,
+            continent,
+            retrieved_at
+        FROM observable_enrichments
+        WHERE observable_id = %s
+        ORDER BY provider;
+        """,
+        (observable_id,),
+    )
+
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "provider": row[0],
+            "asn": row[1],
+            "as_name": row[2],
+            "as_domain": row[3],
+            "country_code": row[4],
+            "country": row[5],
+            "continent_code": row[6],
+            "continent": row[7],
+            "retrieved_at": row[8],
+        }
+        for row in rows
+    ]
+
+
 @router.get("/lookup")
 def lookup_observable(
     value: str = Query(..., min_length=1),
@@ -166,6 +207,11 @@ def lookup_observable(
             related_indicator_count = cursor.fetchone()[0]
 
             intelligence_summary = get_intelligence_summary(
+                cursor,
+                observable_id,
+            )
+
+            enrichments = get_enrichments(
                 cursor,
                 observable_id,
             )
@@ -235,6 +281,7 @@ def lookup_observable(
                         related_indicator_count
                     ),
                     "intelligence_summary": intelligence_summary,
+                    "enrichments": enrichments,
                     "returned": len(related_indicators),
                     "limit": limit,
                     "offset": offset,
