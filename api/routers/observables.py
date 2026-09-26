@@ -12,6 +12,8 @@ router = APIRouter(
 @router.get("/lookup")
 def lookup_observable(
     value: str = Query(..., min_length=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     connection = get_connection()
     cursor = connection.cursor()
@@ -47,6 +49,17 @@ def lookup_observable(
 
             cursor.execute(
                 """
+                SELECT COUNT(*)
+                FROM indicator_observables
+                WHERE observable_id = %s;
+                """,
+                (observable_id,),
+            )
+
+            related_indicator_count = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
                 SELECT
                     i.id,
                     i.type,
@@ -65,9 +78,15 @@ def lookup_observable(
                 JOIN indicators i
                     ON i.id = io.indicator_id
                 WHERE io.observable_id = %s
-                ORDER BY i.first_seen DESC, i.id DESC;
+                ORDER BY i.first_seen DESC, i.id DESC
+                LIMIT %s
+                OFFSET %s;
                 """,
-                (observable_id,),
+                (
+                    observable_id,
+                    limit,
+                    offset,
+                ),
             )
 
             indicator_rows = cursor.fetchall()
@@ -100,9 +119,12 @@ def lookup_observable(
                     "value": row[2],
                     "first_seen": row[3],
                     "last_seen": row[4],
-                    "related_indicator_count": len(
-                        related_indicators
+                    "related_indicator_count": (
+                        related_indicator_count
                     ),
+                    "returned": len(related_indicators),
+                    "limit": limit,
+                    "offset": offset,
                     "related_indicators": related_indicators,
                 }
             )
