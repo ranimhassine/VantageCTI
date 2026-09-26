@@ -83,6 +83,7 @@ def get_indicators(
     limit: int = Query(default=10, ge=1, le=100),
     status: str | None = Query(default=None),
     malware_family: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
 ):
     connection = get_connection()
     cursor = connection.cursor()
@@ -98,6 +99,18 @@ def get_indicators(
         if malware_family:
             conditions.append("LOWER(malware_family) LIKE LOWER(%s)")
             parameters.append(f"%{malware_family}%")
+
+        if tag:
+            conditions.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM unnest(tags) AS tag_name
+                    WHERE LOWER(tag_name) = LOWER(%s)
+                )
+                """
+            )
+            parameters.append(tag)
 
         where_clause = ""
 
@@ -166,6 +179,7 @@ def get_indicators(
             "filters": {
                 "status": status,
                 "malware_family": malware_family,
+                "tag": tag,
             },
             "indicators": indicators,
         }
