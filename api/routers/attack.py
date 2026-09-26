@@ -11,7 +11,9 @@ router = APIRouter(
 
 @router.get("/techniques")
 def get_attack_techniques(
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
     tactic: str | None = Query(default=None),
     platform: str | None = Query(default=None),
     is_subtechnique: bool | None = Query(default=None),
@@ -25,6 +27,30 @@ def get_attack_techniques(
             "deprecated = FALSE",
         ]
         parameters = []
+
+        if search:
+            conditions.append(
+                """
+                (
+                    UPPER(attack_id)
+                        LIKE UPPER(%s)
+                    OR LOWER(name)
+                        LIKE LOWER(%s)
+                    OR LOWER(COALESCE(description, ''))
+                        LIKE LOWER(%s)
+                )
+                """
+            )
+
+            search_value = f"%{search}%"
+
+            parameters.extend(
+                [
+                    search_value,
+                    search_value,
+                    search_value,
+                ]
+            )
 
         if tactic:
             conditions.append(
@@ -51,10 +77,15 @@ def get_attack_techniques(
             parameters.append(platform)
 
         if is_subtechnique is not None:
-            conditions.append("is_subtechnique = %s")
+            conditions.append(
+                "is_subtechnique = %s"
+            )
             parameters.append(is_subtechnique)
 
-        where_clause = "WHERE " + " AND ".join(conditions)
+        where_clause = (
+            "WHERE "
+            + " AND ".join(conditions)
+        )
 
         cursor.execute(
             f"""
@@ -87,9 +118,10 @@ def get_attack_techniques(
             FROM attack_techniques
             {where_clause}
             ORDER BY attack_id
-            LIMIT %s;
+            LIMIT %s
+            OFFSET %s;
             """,
-            parameters + [limit],
+            parameters + [limit, offset],
         )
 
         rows = cursor.fetchall()
@@ -119,7 +151,10 @@ def get_attack_techniques(
         return {
             "total": total,
             "returned": len(techniques),
+            "limit": limit,
+            "offset": offset,
             "filters": {
+                "search": search,
                 "tactic": tactic,
                 "platform": platform,
                 "is_subtechnique": is_subtechnique,
@@ -166,7 +201,10 @@ def get_attack_technique(attack_id: str):
         if row is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"ATT&CK technique {attack_id} not found",
+                detail=(
+                    f"ATT&CK technique "
+                    f"{attack_id} not found"
+                ),
             )
 
         return {
