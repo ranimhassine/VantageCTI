@@ -1,0 +1,118 @@
+from fastapi import APIRouter, HTTPException, Query
+
+from database.connection import get_connection
+
+
+router = APIRouter(
+    prefix="/api/v1/observables",
+    tags=["Observables"],
+)
+
+
+@router.get("/lookup")
+def lookup_observable(
+    value: str = Query(..., min_length=1),
+):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            SELECT
+                id,
+                type,
+                value,
+                first_seen,
+                last_seen
+            FROM observables
+            WHERE LOWER(value) = LOWER(%s)
+            ORDER BY type;
+            """,
+            (value,),
+        )
+
+        rows = cursor.fetchall()
+
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Observable not found: {value}",
+            )
+
+        observables = []
+
+        for row in rows:
+            observable_id = row[0]
+
+            cursor.execute(
+                """
+                SELECT
+                    i.id,
+                    i.type,
+                    i.value,
+                    i.status,
+                    i.threat_type,
+                    i.malware_family,
+                    i.tags,
+                    i.first_seen,
+                    i.last_seen,
+                    i.source,
+                    i.source_id,
+                    i.source_reference,
+                    io.relationship_type
+                FROM indicator_observables io
+                JOIN indicators i
+                    ON i.id = io.indicator_id
+                WHERE io.observable_id = %s
+                ORDER BY i.first_seen DESC, i.id DESC;
+                """,
+                (observable_id,),
+            )
+
+            indicator_rows = cursor.fetchall()
+
+            related_indicators = []
+
+            for indicator_row in indicator_rows:
+                related_indicators.append(
+                    {
+                        "id": indicator_row[0],
+                        "type": indicator_row[1],
+                        "value": indicator_row[2],
+                        "status": indicator_row[3],
+                        "threat_type": indicator_row[4],
+                        "malware_family": indicator_row[5],
+                        "tags": indicator_row[6],
+                        "first_seen": indicator_row[7],
+                        "last_seen": indicator_row[8],
+                        "source": indicator_row[9],
+                        "source_id": indicator_row[10],
+                        "source_reference": indicator_row[11],
+                        "relationship_type": indicator_row[12],
+                    }
+                )
+
+            observables.append(
+                {
+                    "id": row[0],
+                    "type": row[1],
+                    "value": row[2],
+                    "first_seen": row[3],
+                    "last_seen": row[4],
+                    "related_indicator_count": len(
+                        related_indicators
+                    ),
+                    "related_indicators": related_indicators,
+                }
+            )
+
+        return {
+            "query": value,
+            "matches": len(observables),
+            "observables": observables,
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
