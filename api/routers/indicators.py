@@ -26,6 +26,7 @@ def lookup_indicator(
                 status,
                 threat_type,
                 malware_family,
+                tags,
                 first_seen,
                 last_seen,
                 source,
@@ -57,11 +58,12 @@ def lookup_indicator(
                     "status": row[3],
                     "threat_type": row[4],
                     "malware_family": row[5],
-                    "first_seen": row[6],
-                    "last_seen": row[7],
-                    "source": row[8],
-                    "source_id": row[9],
-                    "source_reference": row[10],
+                    "tags": row[6],
+                    "first_seen": row[7],
+                    "last_seen": row[8],
+                    "source": row[9],
+                    "source_id": row[10],
+                    "source_reference": row[11],
                 }
             )
 
@@ -122,6 +124,7 @@ def get_indicators(
                 status,
                 threat_type,
                 malware_family,
+                tags,
                 first_seen,
                 last_seen,
                 source,
@@ -148,11 +151,12 @@ def get_indicators(
                     "status": row[3],
                     "threat_type": row[4],
                     "malware_family": row[5],
-                    "first_seen": row[6],
-                    "last_seen": row[7],
-                    "source": row[8],
-                    "source_id": row[9],
-                    "source_reference": row[10],
+                    "tags": row[6],
+                    "first_seen": row[7],
+                    "last_seen": row[8],
+                    "source": row[9],
+                    "source_id": row[10],
+                    "source_reference": row[11],
                 }
             )
 

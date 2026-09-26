@@ -60,13 +60,33 @@ def clean_optional_value(value):
     return value
 
 
+def parse_urlhaus_tags(value):
+    cleaned_value = clean_optional_value(value)
+
+    if cleaned_value is None:
+        return []
+
+    tags = []
+
+    for tag in cleaned_value.split(","):
+        cleaned_tag = tag.strip()
+
+        if cleaned_tag:
+            tags.append(cleaned_tag)
+
+    return tags
+
+
 def normalize_urlhaus_record(record):
+    raw_tags = clean_optional_value(record[6])
+
     return {
         "type": "url",
         "value": record[2].strip(),
         "status": clean_optional_value(record[3]),
         "threat_type": clean_optional_value(record[5]),
-        "malware_family": clean_optional_value(record[6]),
+        "malware_family": raw_tags,
+        "tags": parse_urlhaus_tags(raw_tags),
         "first_seen": clean_optional_value(record[1]),
         "last_seen": clean_optional_value(record[4]),
         "source": "URLhaus",

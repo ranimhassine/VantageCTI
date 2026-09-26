@@ -15,6 +15,7 @@ def save_indicator(cursor, indicator):
             status,
             threat_type,
             malware_family,
+            tags,
             first_seen,
             last_seen,
             source,
@@ -27,6 +28,7 @@ def save_indicator(cursor, indicator):
             %(status)s,
             %(threat_type)s,
             %(malware_family)s,
+            %(tags)s,
             %(first_seen)s,
             %(last_seen)s,
             %(source)s,
@@ -40,6 +42,7 @@ def save_indicator(cursor, indicator):
             status = EXCLUDED.status,
             threat_type = EXCLUDED.threat_type,
             malware_family = EXCLUDED.malware_family,
+            tags = EXCLUDED.tags,
             first_seen = EXCLUDED.first_seen,
             last_seen = EXCLUDED.last_seen,
             source_reference = EXCLUDED.source_reference;
