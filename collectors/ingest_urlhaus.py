@@ -1,3 +1,4 @@
+from collectors.observable_correlation import correlate_url_indicator
 from collectors.urlhaus import (
     get_urlhaus_recent,
     parse_urlhaus_csv,
@@ -45,10 +46,13 @@ def save_indicator(cursor, indicator):
             tags = EXCLUDED.tags,
             first_seen = EXCLUDED.first_seen,
             last_seen = EXCLUDED.last_seen,
-            source_reference = EXCLUDED.source_reference;
+            source_reference = EXCLUDED.source_reference
+        RETURNING id;
         """,
         indicator,
     )
+
+    return cursor.fetchone()[0]
 
 
 def ingest_urlhaus():
@@ -58,24 +62,57 @@ def ingest_urlhaus():
     records = parse_urlhaus_csv(csv_data)
 
     print(f"Received {len(records)} URLhaus records.")
-    print("Saving indicators to PostgreSQL...")
+    print("Saving indicators and correlating observables...")
 
     connection = get_connection()
     cursor = connection.cursor()
 
     try:
+        processed = 0
+        correlated = 0
+        skipped_correlation = 0
+
         for record in records:
             indicator = normalize_urlhaus_record(record)
-            save_indicator(cursor, indicator)
+
+            indicator_id = save_indicator(
+                cursor,
+                indicator,
+            )
+
+            correlation_created = correlate_url_indicator(
+                cursor,
+                indicator_id,
+                indicator["value"],
+                indicator["first_seen"],
+                indicator["last_seen"],
+            )
+
+            processed += 1
+
+            if correlation_created:
+                correlated += 1
+            else:
+                skipped_correlation += 1
 
         connection.commit()
 
         print("URLhaus ingestion completed successfully.")
-        print(f"Processed: {len(records)} indicators.")
+        print(f"Processed: {processed} indicators.")
+        print(f"Correlated: {correlated}")
+        print(
+            "Skipped correlation: "
+            f"{skipped_correlation}"
+        )
 
     except Exception:
         connection.rollback()
-        print("Ingestion failed. Database changes were rolled back.")
+
+        print(
+            "Ingestion failed. "
+            "Database changes were rolled back."
+        )
+
         raise
 
     finally:
