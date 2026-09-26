@@ -9,6 +9,113 @@ router = APIRouter(
 )
 
 
+def get_count_summary(
+    cursor,
+    observable_id,
+    column_name,
+):
+    allowed_columns = {
+        "status",
+        "threat_type",
+        "source",
+    }
+
+    if column_name not in allowed_columns:
+        raise ValueError(
+            f"Unsupported summary column: {column_name}"
+        )
+
+    cursor.execute(
+        f"""
+        SELECT
+            i.{column_name},
+            COUNT(*) AS indicator_count
+        FROM indicator_observables io
+        JOIN indicators i
+            ON i.id = io.indicator_id
+        WHERE
+            io.observable_id = %s
+            AND i.{column_name} IS NOT NULL
+            AND i.{column_name} <> ''
+        GROUP BY i.{column_name}
+        ORDER BY
+            indicator_count DESC,
+            i.{column_name};
+        """,
+        (observable_id,),
+    )
+
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "name": row[0],
+            "count": row[1],
+        }
+        for row in rows
+    ]
+
+
+def get_tag_summary(
+    cursor,
+    observable_id,
+):
+    cursor.execute(
+        """
+        SELECT
+            tag_name,
+            COUNT(*) AS indicator_count
+        FROM indicator_observables io
+        JOIN indicators i
+            ON i.id = io.indicator_id
+        CROSS JOIN LATERAL unnest(i.tags) AS tag_name
+        WHERE io.observable_id = %s
+        GROUP BY tag_name
+        ORDER BY
+            indicator_count DESC,
+            tag_name;
+        """,
+        (observable_id,),
+    )
+
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "name": row[0],
+            "count": row[1],
+        }
+        for row in rows
+    ]
+
+
+def get_intelligence_summary(
+    cursor,
+    observable_id,
+):
+    return {
+        "statuses": get_count_summary(
+            cursor,
+            observable_id,
+            "status",
+        ),
+        "threat_types": get_count_summary(
+            cursor,
+            observable_id,
+            "threat_type",
+        ),
+        "sources": get_count_summary(
+            cursor,
+            observable_id,
+            "source",
+        ),
+        "tags": get_tag_summary(
+            cursor,
+            observable_id,
+        ),
+    }
+
+
 @router.get("/lookup")
 def lookup_observable(
     value: str = Query(..., min_length=1),
@@ -57,6 +164,11 @@ def lookup_observable(
             )
 
             related_indicator_count = cursor.fetchone()[0]
+
+            intelligence_summary = get_intelligence_summary(
+                cursor,
+                observable_id,
+            )
 
             cursor.execute(
                 """
@@ -122,6 +234,7 @@ def lookup_observable(
                     "related_indicator_count": (
                         related_indicator_count
                     ),
+                    "intelligence_summary": intelligence_summary,
                     "returned": len(related_indicators),
                     "limit": limit,
                     "offset": offset,
