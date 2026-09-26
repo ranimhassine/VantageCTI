@@ -87,6 +87,65 @@ CREATE TABLE IF NOT EXISTS attack_techniques (
 
 
 -- ============================================================
+-- Correlated Observables
+-- ============================================================
+--
+-- Observables represent reusable normalized CTI entities such as
+-- IP addresses and domains. Multiple indicators can reference the
+-- same observable instead of duplicating infrastructure context.
+
+CREATE TABLE IF NOT EXISTS observables (
+    id SERIAL PRIMARY KEY,
+
+    type VARCHAR(50) NOT NULL,
+    value TEXT NOT NULL,
+
+    first_seen TIMESTAMP,
+    last_seen TIMESTAMP,
+
+    CONSTRAINT observables_type_value_unique
+        UNIQUE (type, value)
+);
+
+
+-- ============================================================
+-- Indicator-to-Observable Relationships
+-- ============================================================
+--
+-- Connects source indicators to normalized observables.
+-- Example:
+--
+-- URL indicator
+--     -> extracted_host
+--     -> IP/domain observable
+
+CREATE TABLE IF NOT EXISTS indicator_observables (
+    id SERIAL PRIMARY KEY,
+
+    indicator_id INTEGER NOT NULL,
+    observable_id INTEGER NOT NULL,
+    relationship_type VARCHAR(100) NOT NULL,
+
+    CONSTRAINT indicator_observables_indicator_fk
+        FOREIGN KEY (indicator_id)
+        REFERENCES indicators(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT indicator_observables_observable_fk
+        FOREIGN KEY (observable_id)
+        REFERENCES observables(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT indicator_observables_unique
+        UNIQUE (
+            indicator_id,
+            observable_id,
+            relationship_type
+        )
+);
+
+
+-- ============================================================
 -- Application Role Permissions
 -- ============================================================
 --
@@ -106,6 +165,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 ON TABLE attack_techniques
 TO cti_app;
 
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE observables
+TO cti_app;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE indicator_observables
+TO cti_app;
+
 
 GRANT USAGE, SELECT
 ON SEQUENCE vulnerabilities_id_seq
@@ -117,4 +184,12 @@ TO cti_app;
 
 GRANT USAGE, SELECT
 ON SEQUENCE attack_techniques_id_seq
+TO cti_app;
+
+GRANT USAGE, SELECT
+ON SEQUENCE observables_id_seq
+TO cti_app;
+
+GRANT USAGE, SELECT
+ON SEQUENCE indicator_observables_id_seq
 TO cti_app;
