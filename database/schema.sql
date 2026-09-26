@@ -146,6 +146,21 @@ CREATE TABLE IF NOT EXISTS indicator_observables (
 
 
 -- ============================================================
+-- Relationship Lookup Indexes
+-- ============================================================
+--
+-- The unique constraint above already provides an index beginning
+-- with indicator_id. This additional index supports the reverse
+-- investigation path:
+--
+-- observable -> relationships -> indicators
+
+CREATE INDEX IF NOT EXISTS
+    indicator_observables_observable_id_idx
+ON indicator_observables (observable_id);
+
+
+-- ============================================================
 -- Application Role Permissions
 -- ============================================================
 --
